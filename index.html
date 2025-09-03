@@ -4523,7 +4523,7 @@ async function initUserData() {
                 Telegram.WebApp.BackButton.onClick(handleBackButton);
             }
 
-            // 🔥 Сохраняем пользователя в бекенд (баланс будет 0 для новых)
+            // Сохраняем пользователя в бекенд
             await saveUserToBackend(user);
 
             // Загружаем баланс и корзину
@@ -4546,17 +4546,20 @@ async function initUserData() {
 // ======================== //
 async function saveUserToBackend(user) {
     try {
+        // Получаем текущий баланс из localStorage
+        const currentBalance = parseInt(localStorage.getItem('userBalance') || '0');
+        
         const userData = {
             id: user.id,
             telegramId: user.id,
             username: user.username || '',
             firstName: user.first_name || '',
             lastName: user.last_name || '',
+            balance: currentBalance,
             avatarUrl: user.photo_url || null
-            // НЕ отправляем баланс - он будет 0 на сервере для новых пользователей
         };
 
-        console.log("📡 Sending user to backend:", userData);
+        console.log("📡 Sending user to backend with balance:", currentBalance);
 
         const response = await fetch(`${BACKEND_URL}/users`, {
             method: "POST",
@@ -4569,7 +4572,7 @@ async function saveUserToBackend(user) {
         const result = await response.json();
         localStorage.setItem('backend_user', JSON.stringify(result));
 
-        console.log("✅ User saved to backend:", result);
+        console.log("✅ User saved to backend with balance:", result.balance);
 
     } catch (error) {
         console.error("❌ Backend user save error:", error);
@@ -4584,10 +4587,12 @@ async function loadBalanceFromBackend(telegramId) {
         const response = await fetch(`${BACKEND_URL}/users/${telegramId}/balance`);
         if (!response.ok) throw new Error("Balance load failed");
 
-        const { balance } = await response.json();
+        const data = await response.json();
+        const balance = data.balance || 0;
+        
         document.getElementById('balance').textContent = balance;
-
         localStorage.setItem('userBalance', balance.toString());
+        
         console.log("💰 Balance loaded:", balance);
 
     } catch (error) {
@@ -4676,7 +4681,11 @@ async function addBalance(amount) {
             const result = await response.json();
             document.getElementById('balance').textContent = result.newBalance;
             localStorage.setItem('userBalance', result.newBalance.toString());
-            showToast(`Баланс пополнен на ${amount}! 🎉`);
+            
+            // Обновляем пользователя с новым балансом
+            await saveUserToBackend(user);
+            
+            showToast('Баланс пополнен на ' + amount + '! 🎉');
             return true;
         } else {
             showToast('Ошибка пополнения баланса');
@@ -4708,6 +4717,10 @@ async function subtractBalance(amount) {
             const result = await response.json();
             document.getElementById('balance').textContent = result.newBalance;
             localStorage.setItem('userBalance', result.newBalance.toString());
+            
+            // Обновляем пользователя с новым балансом
+            await saveUserToBackend(user);
+            
             return true;
         } else {
             showToast('Недостаточно средств');
@@ -4717,37 +4730,6 @@ async function subtractBalance(amount) {
     } catch (error) {
         console.error("Subtract balance error:", error);
         showToast('Ошибка списания');
-        return false;
-    }
-}
-
-// ======================== //
-//   УДАЛЕНИЕ ИЗ КОРЗИНЫ   //
-// ======================== //
-async function removeFromCart(productId) {
-    try {
-        const user = Telegram.WebApp.initDataUnsafe?.user;
-        if (!user) {
-            showToast('Требуется авторизация');
-            return false;
-        }
-
-        const response = await fetch(`${BACKEND_URL}/cart/${user.id}/${productId}`, {
-            method: "DELETE"
-        });
-
-        if (response.ok) {
-            await loadCartFromBackend(user.id);
-            showToast('Товар удален из корзины');
-            return true;
-        } else {
-            showToast('Ошибка удаления товара');
-            return false;
-        }
-        
-    } catch (error) {
-        console.error("Remove from cart error:", error);
-        showToast('Ошибка соединения');
         return false;
     }
 }
