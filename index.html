@@ -4462,99 +4462,13 @@
 
 <script>
 // 🌍 URL твоего бэкенда
-const BACKEND_URL = "https://telegram-app-2-9oh6.onrender.com/";
-
-// ======================== //
-//   CORS и обработка ошибок  //
-// ======================== //
-
-// Глобальная обработка CORS ошибок
-function setupCORS() {
-    const originalFetch = window.fetch;
-    
-    window.fetch = async function(...args) {
-        try {
-            const response = await originalFetch.apply(this, args);
-            
-            if (response.status === 0 || response.type === 'opaque') {
-                console.warn('CORS warning: response type opaque');
-            }
-            
-            return response;
-            
-        } catch (error) {
-            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                console.error('CORS error: Failed to fetch', error);
-                showToast('Ошибка соединения с сервером');
-                throw new Error('CORS_ERROR');
-            }
-            throw error;
-        }
-    };
-}
-
-// Функция для безопасных запросов
-async function safeFetch(url, options = {}) {
-    try {
-        const response = await fetch(url, {
-            ...options,
-            mode: 'cors',
-            credentials: 'omit',
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        return await response.json();
-        
-    } catch (error) {
-        console.error('Fetch error:', error);
-        
-        if (error.message === 'Failed to fetch') {
-            showToast('Ошибка соединения с сервером');
-            throw new Error('NETWORK_ERROR');
-        }
-        
-        throw error;
-    }
-}
-
-// Проверка CORS
-async function checkCORS() {
-    try {
-        console.log('Testing CORS connection...');
-        
-        const response = await fetch(`${BACKEND_URL}/health`, {
-            method: 'GET',
-            mode: 'cors'
-        });
-        
-        if (response.ok) {
-            console.log('✅ CORS is working correctly');
-            return true;
-        }
-        
-        return false;
-        
-    } catch (error) {
-        console.error('❌ CORS error:', error);
-        return false;
-    }
-}
+const BACKEND_URL = "https://telegram-app-2-9oh6.onrender.com";
 
 // ======================== //
 //   ИНИЦИАЛИЗАЦИЯ ДАННЫХ   //
 // ======================== //
 async function initUserData() {
     console.log("🔍 initUserData function called");
-
-    // Инициализируем CORS обработку
-    setupCORS();
 
     if (window.Telegram && Telegram.WebApp) {
         console.log("✅ Telegram WebApp detected");
@@ -4604,22 +4518,17 @@ async function initUserData() {
                     </svg>`;
             }
 
-            // Кнопка назад
             if (Telegram.WebApp.BackButton) {
                 Telegram.WebApp.BackButton.show();
                 Telegram.WebApp.BackButton.onClick(handleBackButton);
             }
 
-            // Проверяем CORS
-            setTimeout(checkCORS, 500);
+            // 🔥 Сохраняем пользователя в бекенд
+            await saveUserToBackend(user);
 
-            // Сохраняем пользователя и загружаем данные
-            const userData = await saveUserToBackend(user);
-            
-            if (userData) {
-                await loadBalanceFromBackend(telegramId);
-                await loadCartFromBackend(telegramId);
-            }
+            // Загружаем баланс и корзину
+            await loadBalanceFromBackend(telegramId);
+            await loadCartFromBackend(telegramId);
 
         } else {
             console.log("❌ No user data available");
@@ -4638,28 +4547,33 @@ async function initUserData() {
 async function saveUserToBackend(user) {
     try {
         const userData = {
+            id: user.id,
             telegramId: user.id,
             username: user.username || '',
             firstName: user.first_name || '',
             lastName: user.last_name || '',
+            balance: 0,
+            joinDate: new Date().toISOString(),
             avatarUrl: user.photo_url || null
         };
 
         console.log("📡 Sending user to backend:", userData);
 
-        const result = await safeFetch(`${BACKEND_URL}/users`, {
+        const response = await fetch(`${BACKEND_URL}/users`, {
             method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(userData)
         });
 
-        localStorage.setItem('user_data', JSON.stringify(result));
+        if (!response.ok) throw new Error("Failed to save user");
+
+        const result = await response.json();
+        localStorage.setItem('backend_user', JSON.stringify(result));
+
         console.log("✅ User saved to backend:", result);
-        return result;
 
     } catch (error) {
         console.error("❌ Backend user save error:", error);
-        showToast('Ошибка сохранения пользователя');
-        return null;
     }
 }
 
@@ -4668,22 +4582,18 @@ async function saveUserToBackend(user) {
 // ======================== //
 async function loadBalanceFromBackend(telegramId) {
     try {
-        console.log("💰 Loading balance for user:", telegramId);
-        
-        const data = await safeFetch(`${BACKEND_URL}/users/${telegramId}/balance`);
-        const balance = data.balance || 1000;
-        
+        const response = await fetch(`${BACKEND_URL}/users/${telegramId}/balance`);
+        if (!response.ok) throw new Error("Balance load failed");
+
+        const { balance } = await response.json();
         document.getElementById('balance').textContent = balance;
+
         localStorage.setItem('userBalance', balance.toString());
-        
-        console.log("✅ Balance loaded:", balance);
-        return balance;
+        console.log("💰 Balance loaded:", balance);
 
     } catch (error) {
         console.error("❌ Balance load error:", error);
-        document.getElementById('balance').textContent = '1000';
-        showToast('Ошибка загрузки баланса');
-        return 1000;
+        document.getElementById('balance').textContent = '0';
     }
 }
 
@@ -4692,21 +4602,19 @@ async function loadBalanceFromBackend(telegramId) {
 // ======================== //
 async function loadCartFromBackend(telegramId) {
     try {
-        console.log("🛒 Loading cart for user:", telegramId);
-        
-        const cartItems = await safeFetch(`${BACKEND_URL}/cart/${telegramId}`);
+        const response = await fetch(`${BACKEND_URL}/cart/${telegramId}`);
+        if (!response.ok) throw new Error("Cart load failed");
+
+        const cartItems = await response.json();
         
         localStorage.setItem('userCart', JSON.stringify(cartItems));
         updateCartIconCount();
         
-        console.log("✅ Cart loaded:", cartItems.length, "items");
-        return cartItems;
+        console.log("🛒 Cart loaded:", cartItems.length, "items");
 
     } catch (error) {
         console.error("❌ Cart load error:", error);
         localStorage.setItem('userCart', JSON.stringify([]));
-        showToast('Ошибка загрузки корзины');
-        return [];
     }
 }
 
@@ -4714,44 +4622,93 @@ async function loadCartFromBackend(telegramId) {
 //   ДОБАВЛЕНИЕ В КОРЗИНУ  //
 // ======================== //
 async function addToCart(productId) {
-    const user = Telegram.WebApp.initDataUnsafe?.user;
-    
-    if (!user) {
-        showToast('Требуется авторизация в Telegram');
-        return;
-    }
-
     const product = productsData.find(p => p.id === productId);
     
-    if (!product) {
-        showToast('Товар не найден');
-        return;
-    }
-
-    const telegramId = user.id.toString();
-    
-    try {
-        console.log("🛒 Adding to cart:", product.title);
+    if (product && window.Telegram && Telegram.WebApp.initDataUnsafe?.user) {
+        const telegramId = Telegram.WebApp.initDataUnsafe.user.id.toString();
         
-        await safeFetch(`${BACKEND_URL}/cart`, {
+        try {
+            const response = await fetch(`${BACKEND_URL}/cart`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    telegramId: telegramId,
+                    productId: product.id,
+                    name: product.title,
+                    price: product.price,
+                    quantity: 1,
+                    image: product.image
+                })
+            });
+
+            if (response.ok) {
+                await loadCartFromBackend(telegramId);
+                showToast('Товар добавлен в корзину!');
+                triggerVibration();
+            } else {
+                showToast('Ошибка при добавлении товара');
+            }
+            
+        } catch (error) {
+            console.error("❌ Add to cart error:", error);
+            showToast('Ошибка соединения');
+        }
+    }
+}
+
+// ======================== //
+//   ОПЕРАЦИИ С БАЛАНСОМ   //
+// ======================== //
+async function addBalance(amount) {
+    try {
+        const user = Telegram.WebApp.initDataUnsafe?.user;
+        if (!user) return false;
+
+        const response = await fetch(`${BACKEND_URL}/users/${user.id}/balance/add`, {
             method: "POST",
-            body: JSON.stringify({
-                telegramId: telegramId,
-                productId: product.id,
-                name: product.title,
-                price: product.price,
-                quantity: 1,
-                image: product.image
-            })
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: amount })
         });
 
-        await loadCartFromBackend(telegramId);
-        showToast('Товар добавлен в корзину! 🎉');
-        triggerVibration();
-
+        if (response.ok) {
+            const result = await response.json();
+            document.getElementById('balance').textContent = result.newBalance;
+            localStorage.setItem('userBalance', result.newBalance.toString());
+            showToast(`Баланс пополнен на ${amount}!`);
+            return true;
+        }
+        
+        return false;
     } catch (error) {
-        console.error("❌ Add to cart error:", error);
-        showToast('Ошибка при добавлении товара');
+        console.error("Add balance error:", error);
+        showToast('Ошибка пополнения баланса');
+        return false;
+    }
+}
+
+async function subtractBalance(amount) {
+    try {
+        const user = Telegram.WebApp.initDataUnsafe?.user;
+        if (!user) return false;
+
+        const response = await fetch(`${BACKEND_URL}/users/${user.id}/balance/subtract`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: amount })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            document.getElementById('balance').textContent = result.newBalance;
+            localStorage.setItem('userBalance', result.newBalance.toString());
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        console.error("Subtract balance error:", error);
+        showToast('Ошибка списания средств');
+        return false;
     }
 }
 
