@@ -4555,7 +4555,7 @@ async function saveUserToBackend(user) {
             username: user.username || '',
             firstName: user.first_name || '',
             lastName: user.last_name || '',
-            balance: currentBalance,
+            balance: currentBalance, // ← ОТПРАВЛЯЕМ ТЕКУЩИЙ БАЛАНС!
             avatarUrl: user.photo_url || null
         };
 
@@ -4623,7 +4623,7 @@ async function loadCartFromBackend(telegramId) {
 }
 
 // ======================== //
-//   ДОБАВЛЕНИЕ В КОРЗИНУ  //
+//   ДОБАВЛЕНИЕ В КОРзину  //
 // ======================== //
 async function addToCart(productId) {
     const product = productsData.find(p => p.id === productId);
@@ -4682,7 +4682,7 @@ async function addBalance(amount) {
             document.getElementById('balance').textContent = result.newBalance;
             localStorage.setItem('userBalance', result.newBalance.toString());
             
-            // Обновляем пользователя с новым балансом
+            // ОБНОВЛЯЕМ ПОЛЬЗОВАТЕЛЯ С НОВЫМ БАЛАНСОМ!
             await saveUserToBackend(user);
             
             showToast('Баланс пополнен на ' + amount + '! 🎉');
@@ -4718,7 +4718,7 @@ async function subtractBalance(amount) {
             document.getElementById('balance').textContent = result.newBalance;
             localStorage.setItem('userBalance', result.newBalance.toString());
             
-            // Обновляем пользователя с новым балансом
+            // ОБНОВЛЯЕМ ПОЛЬЗОВАТЕЛЯ С НОВЫМ БАЛАНСОМ!
             await saveUserToBackend(user);
             
             return true;
