@@ -4849,6 +4849,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
+// В конец initUserData, после всего
+setTimeout(() => {
+    const currentBalance = document.getElementById('balance').textContent;
+    console.log("🔄 Final balance check:", currentBalance);
+}, 1000);// В конец initUserData, после всего
+
 // Верхнее меню (вкладки)
 const tabItems = document.querySelectorAll('.tab-item[data-tab]');
 const tabContents = document.querySelectorAll('.tab-content');
